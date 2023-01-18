@@ -1,32 +1,26 @@
 /*******************************
  * 
  * TODO :
- * ENREGISTRER DANS LA RTC !!!!!!
  * Attention à l'overflow de millis() ???
  * 
  * 
  * Binary watch version 0.1
  * 
- * How to read it 
+ * How to read it (BCD, binary coded digits)
  * Each digit is separated. The two first digits are for the hours, the two last for minutes
  * the Bottom digit adds 1, the second 2, the third 4, and the top one 8
  * For instance if # are on and _ are off
  *      _ _ _ _
  *      _ _ # #
- *      _ # _ #
+ *      _ # _ # 
  *      # # _ #
  *      1 3:4 7
  *      
  * Buttons
- * "Main menu"
- * Top button, Unlock and show time
- * Left button : set time 
+ * Top button, Unlock and show time 
+ * Left button : set time and then date 
  * Right button : change mode (time, date, stopwatch, remaining battery)
- * 
- * "Set time and date" mode : 
- * The leds are blinking, first set time (hours, minutes), then date(day, month)
- * Tap top button to validate, right to ++, left to --
- * 
+ * See readme for more details
  * 
  *******************************/
 
@@ -47,12 +41,6 @@
 Adafruit_FreeTouch qt_top = Adafruit_FreeTouch(BUTTON_TOP, OVERSAMPLE_4, RESISTOR_50K, FREQ_MODE_NONE);
 Adafruit_FreeTouch qt_left = Adafruit_FreeTouch(BUTTON_LEFT, OVERSAMPLE_4, RESISTOR_50K, FREQ_MODE_NONE);
 Adafruit_FreeTouch qt_right = Adafruit_FreeTouch(BUTTON_RIGHT, OVERSAMPLE_4, RESISTOR_50K, FREQ_MODE_NONE);
-
-#define BLINK_ALL -1
-
-unsigned long pmBlink = 0;
-bool blink = false; 
-bool blinkTog = true;
 
 //as arduno zero on prog port
 const int ledPin [4][4] = { {0,0,17,16}, //1st digit of hours, The two first leds are not connected to the uC
@@ -81,11 +69,10 @@ void setup() {
       digitalWrite(ledPin[i][j], ledState[i][j]);
     }
   }
-  //while(1)
-    ledsTest(1);
+    
 
   //Do not remove that line 
-  delay(5000); // set a delay to ease programming, sleep mode can interfere with prog mode
+  //ledsTest(5); // set a delay to ease programming, sleep mode can interfere with prog mode
   
   // Setup the RTCCounter
   rtcCounter.begin();
@@ -94,15 +81,16 @@ void setup() {
   rtcCounter.setPeriodicAlarm(1);
 
   // Set the sleep mode
-  //SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+  SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
 
   //disable usb
   USB->DEVICE.CTRLA.reg &= ~USB_CTRLA_ENABLE;
 
   if (! qt_top.begin() || ! qt_left.begin() || ! qt_right.begin() )  //eror with qtouch makes col 2 blink
-    blinkLeds(2);
-  
-  ledsTest(0.5);
+  {
+    digitalWrite(21,!digitalRead(21));
+    delay(500);
+  }
 }
 
 
@@ -127,17 +115,15 @@ void loop() {
     timeToLeds();
     pm = millis(); 
     menuIndex = 0; //reset it if you are lost 
-
   }
 
-  if(qt_left.measure() > QTOUCH_THRESHOLD) 
+  if(qt_right.measure() > QTOUCH_THRESHOLD) 
   {
     menuIndex = (menuIndex+1) % 4;
     //show index for 1s
     digitalWrite(ledPin[menuIndex][0], HIGH);
-    ledsShow();
-    delay(1000);
-    ledsOff();
+    delay(500);
+    digitalWrite(ledPin[menuIndex][0], LOW);
 
     pm = millis();
     
@@ -145,24 +131,26 @@ void loop() {
       timeToLeds();
     if(menuIndex == 1)
       dateToLeds();
-    if(menuIndex == 2)
+    if(menuIndex == 2){
       stopwatch();
-    if(menuIndex == 3)
+      menuIndex++; //don't forget to inc menu because stopwatch is a new screen
+    }
+    if(menuIndex == 3){
       remainingBattery();
+      delay(4000); //stay a bit on this screen
+    }
+      
   }
   
-  if(qt_right.measure() > QTOUCH_THRESHOLD) 
+  if(qt_left.measure() > QTOUCH_THRESHOLD) 
   {
-    ledsTest(1);
+    ledsTest(0.75);
     pm = millis(); 
     setTime();
     ledsTest(0.5); //faster animation
     setDate();
     ledsTest(0.5);
-    blink = false;
   }
-  
-  //blinkLeds(BLINK_ALL);
 
   //sleeps after timeout
   if(millis() - pm > ON_DURATION){
@@ -185,7 +173,7 @@ void systemSleep()
     __WFI();
   }
 }
-
+/*
 void blinkLeds(int col)
 {
   if(blink && pmBlink-millis() > 500)
@@ -226,7 +214,7 @@ void blinkLeds(int col)
     //reset timer
     pmBlink = millis();
   }
-}
+}*/
 
 //show the leds that are supposed to be on
 void ledsShow()
@@ -291,7 +279,7 @@ void remainingBattery()
     digitToLedColumn(0b0011, 3);
   else {
     digitToLedColumn(0b0001, 3);
-    blink = true;
+    //blink = true;
   }
   ledsShow();
 }
@@ -302,12 +290,11 @@ void timeToLeds()
   time_t epoch = rtcCounter.getEpoch();
   struct tm* t = gmtime(&epoch);
   
-  uint8_t timeArr[4] = {(uint8_t) ( (t->tm_hour/10) % 10 ),  //1st digit of hours
-                     (uint8_t) ( (t->tm_hour/10) % 10 ),  //2nd of hours
-                     (uint8_t) ( (t->tm_min/10) % 10 ),  //1st digit of min
-                     (uint8_t) ( (t->tm_min/10) % 10 )   //2nd of min
-                    };
-  //uint8_t timeArr[4] = {1,8,3,5};         
+  int timeArr[4] = { ( (t->tm_hour/10) % 10 ),  //1st digit of hours
+                     ( (t->tm_hour) % 10 ),  //2nd of hours
+                     ( (t->tm_min/10) % 10 ),  //1st digit of min
+                     ( (t->tm_min) % 10 )   //2nd of min
+                    };      
                     
   for(int i=0; i<4; i++)  //read and copy the bits from digit to led digit
   {
@@ -322,17 +309,18 @@ void dateToLeds() //close to TimeToLeds
   time_t epoch = rtcCounter.getEpoch();
   struct tm* t = gmtime(&epoch);
   
-  uint8_t timeArr[4] = {(uint8_t) ( ((t->tm_mon + 1)/10) ),  //1st digit of month
-                       (uint8_t) ( ((t->tm_mon + 1) %10) ),  //2nd of month
-                       (uint8_t) ( (t->tm_mday/10) / 10 ),  //1st digit of month day
-                       (uint8_t) ( (t->tm_mday/10) % 10 )   //2nd of month day
-                      };
+  //do +1 because RTC starts at 0 and human month and days at 1
+  int timeArr[4] = {(t->tm_mday+1) / 10,  //1st digit of month day
+                    (t->tm_mday+1) % 10,  //2nd of month day
+                    (t->tm_mon + 1) / 10,  //1st digit of month
+                    (t->tm_mon + 1) % 10  //2nd of month
+                  };
                     
   for(int i=0; i<4; i++)  //read and copy the bits from digit to led digit
   {
     digitToLedColumn(timeArr[i], i);
   }
-  
+  ledsShow();
 }
 
 void digitToLedColumn(uint8_t digit, int column)
@@ -346,43 +334,50 @@ void digitToLedColumn(uint8_t digit, int column)
 
 void setTime()
 {
-  //blink = true;
   time_t epoch = rtcCounter.getEpoch();
   struct tm* t = gmtime(&epoch);
 
   int index = 0;
   uint8_t hour = t->tm_hour;
-  uint8_t minute = t->tm_min;
+  uint8_t minute = 11; //the two bottom leds will be on
+
+  //display current value
+  hour = hour-1; //if init will do +1, counter it 
+  bool doInit = 1;
+
   
-  while(qt_top.measure() < QTOUCH_THRESHOLD+100 && index < 4)
+  while(qt_top.measure() < QTOUCH_THRESHOLD+100 && index < 4) 
   {
-    if(qt_left.measure() > QTOUCH_THRESHOLD){
+    if(qt_right.measure() > QTOUCH_THRESHOLD){
       if(index == 0){
         index += 2; //hours in one shot
-        digitToLedColumn(0b1111, index+1);
+        //digitToLedColumn(0b1111, index+1);
       }
-        
       else 
-        index++; //min in two steps
+        index++; //set minutes in two steps
 
-      digitToLedColumn(0b1111, index);
+      //digitToLedColumn(0b1111, index%4); //on all leds of the column prevent accessing col 4 that do not exists
       ledsShow();
       delay(300);
       ledsOff();
-
     }
     
-    if(qt_right.measure() > QTOUCH_THRESHOLD){
+    if( (qt_left.measure() > QTOUCH_THRESHOLD || doInit == 1) && index < 4){
+      doInit = 0; //do it once only
       
       if(index == 0) //1st of hour 
         hour = (hour + 1) % 24;
       if(index == 2) //1st of min 
         minute = (minute + 10) % 60;
-      if(index == 3)
-        minute = (minute + 1) % 60;
+      if(index == 3){
+        if(minute % 10 == 9)
+          minute -= 10; //don't modify the tens digit of the minute, too strange and unexpected when we set the time  
+        minute = (minute + 1) % 60; 
 
+      }
+    
       //refresh leds 
-      uint8_t timeArr[4] = {hour / 10 ,  //1st digit of min
+      uint8_t timeArr[4] = {hour / 10,  //1st digit of min
                          hour % 10,  //2nd of hours
                          minute / 10,  //1st digit of min
                          minute % 10   //2nd of min
@@ -393,7 +388,6 @@ void setTime()
         digitToLedColumn(timeArr[i], i);
       }
       ledsShow();
-      //rtcCounter.setEpoch(mktime(&t)); //pas fou de faire ça à chaque fois, on verra pour faire propre + tard
       delay(300);
       
     }
@@ -402,18 +396,16 @@ void setTime()
     ledsColOff(index); //okay since it does not modify leds array
     if(index == 0)  //if hours, blink 2 col
       ledsColOff(index+1);
-    delay(100);
+    delay(50);
     ledsShow();    
-
-    //blinkLeds(index); //do not works
-    saveTime(hour, minute);
+    delay(200);
+    
   }
-  //blink = false;
+  saveTime(hour, minute);
 }
 
 void saveTime(uint8_t hour, uint8_t minute)
 {
-  //get date first ????? 
   time_t epoch = rtcCounter.getEpoch();
   struct tm* t = gmtime(&epoch);
   
@@ -434,7 +426,81 @@ void saveTime(uint8_t hour, uint8_t minute)
 
 void setDate()
 {
-  //same as time, please verify the above function first
+  //time_t epoch = rtcCounter.getEpoch();
+  //struct tm* t = gmtime(&epoch);
+
+  int index = 0;
+  uint8_t month = 0;
+  uint8_t mday = 0; // month day (not week day)
+
+  //display current value
+  bool doInit = 1;
+
+  while(qt_top.measure() < QTOUCH_THRESHOLD+100 && index < 4) 
+  {
+    if(qt_right.measure() > QTOUCH_THRESHOLD){
+      
+      index += 2; 
+
+      ledsShow();
+      delay(300);
+      ledsOff();
+    }
+    
+    if( (qt_left.measure() > QTOUCH_THRESHOLD || doInit == 1) && index < 4){
+      doInit = 0; //do it once only
+      
+      if(index == 0) //first we modify mday
+        mday = (mday + 1) % 31;
+      if(index == 2) //then month
+        month = (month + 1) % 12;
+    
+    
+      //refresh leds 
+      uint8_t timeArr[4] = {(mday+1) / 10, //do +1 because January 1st is month 0 and mday 0 for ex, starts at 0 not 1
+                         (mday+1) % 10,  
+                         (month+1) / 10,  
+                         (month+1) % 10   
+                    };
+                        
+      for(int i=0; i<4; i++)  //read and copy the bits from digit to led digit
+      {
+        digitToLedColumn(timeArr[i], i);
+      }
+      ledsShow();
+      delay(300);
+      
+    }
+
+    //blink active column(s)
+    ledsColOff(index); //okay since it does not modify leds array
+    ledsColOff(index+1);//blink two colums 
+    delay(50);
+    ledsShow();    
+    delay(200);
+    
+  }
+  saveDate(mday, month);
+}
+
+void saveDate(uint8_t day, uint8_t month)
+{
+  time_t epoch = rtcCounter.getEpoch();
+  struct tm* t = gmtime(&epoch);
+  
+  struct tm tm;
+
+  tm.tm_isdst = t->tm_isdst;
+  tm.tm_yday = t->tm_yday;
+  tm.tm_wday = t->tm_wday;
+  tm.tm_year = t->tm_year;
+  tm.tm_mon = month;
+  tm.tm_mday = day;
+  tm.tm_hour = t->tm_hour;
+  tm.tm_min = t->tm_min;
+  tm.tm_sec = t->tm_sec;
+  
+  rtcCounter.setEpoch(mktime(&tm));
 }
 
 void stopwatch()
@@ -442,33 +508,37 @@ void stopwatch()
   //first column is now min and last is last digit of seconds 
   unsigned long sTime = millis();
   unsigned long oneHertz = millis();
-  unsigned long pauseTime = 0;
 
-  bool paused = true; //start in paused mode for convenience
+  bool paused = false; //don't start in pause mode as it's difficult to understand what's happening if it do nothing
   
   ledsOff();
   
-  while(qt_top.measure() < QTOUCH_THRESHOLD)
+  while(qt_right.measure() < QTOUCH_THRESHOLD)
   {
 
-    //left button will pause 
-    if(qt_right.measure() > QTOUCH_THRESHOLD)
+    //right button will pause 
+    if(qt_left.measure() > QTOUCH_THRESHOLD)
     {
       paused = !paused;
-      delay(1000);
+      ledsOff();      
+      delay(500);
+      ledsShow();
+      delay(500);
     }
-    
-    if(millis()-oneHertz > 1000)
+
+    if(millis()-oneHertz >= 1000)
     {
       oneHertz = millis();
 
       //remove time when it was paused
-      if(paused)
-        pauseTime += 1000;
+      //if(paused)
+      //  pauseTime += 1000;
+      if(paused) //pause correspond to delaying startTime
+        sTime += 1000;
       
       //display time from start 
-      uint8_t minutes = (millis() - sTime - pauseTime) / 60000;
-      uint8_t sec = ( (millis() / 1000) % 60000);
+      uint8_t minutes = (millis() - sTime/* - pauseTime*/) / 60000;
+      uint8_t sec = ( ((millis() - sTime) / 1000) % 60000);
       
       uint8_t timeArr[4] = {minutes / 10 ,  //1st digit of min
                          minutes % 10,  //2nd of hours
