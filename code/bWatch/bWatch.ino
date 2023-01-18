@@ -28,21 +28,21 @@
 #include <time.h>
 #include "Adafruit_FreeTouch.h"
 
-//use precompiled atmel qtouch
-
 #define BUTTON_RIGHT 42//PA03
 #define BUTTON_LEFT A5//PB02
 #define BUTTON_TOP A1//PB08
+#define BATTERY_PROBE 25 //PB03;
 
 #define QTOUCH_THRESHOLD 600
 
 #define ON_DURATION 10000 //sec during which the watch is showing time
+#define SLEEP_DURATION 3 //sec during which the device is sleeping. Correspond to the max amount of time between 2 readings of the capacitive button
 
 Adafruit_FreeTouch qt_top = Adafruit_FreeTouch(BUTTON_TOP, OVERSAMPLE_4, RESISTOR_50K, FREQ_MODE_NONE);
 Adafruit_FreeTouch qt_left = Adafruit_FreeTouch(BUTTON_LEFT, OVERSAMPLE_4, RESISTOR_50K, FREQ_MODE_NONE);
 Adafruit_FreeTouch qt_right = Adafruit_FreeTouch(BUTTON_RIGHT, OVERSAMPLE_4, RESISTOR_50K, FREQ_MODE_NONE);
 
-//as arduno zero on prog port
+//Pins for Arduino Zero (Programming port) board. Do not forget to burn the bootloader
 const int ledPin [4][4] = { {0,0,17,16}, //1st digit of hours, The two first leds are not connected to the uC
                           {9,8,18,14}, //2nd digit of hours
                           {24,23,7,6}, //1st digit of min 
@@ -55,9 +55,9 @@ int ledState [4][4] = { {0,0,0,0}, //1st digit of hours
                         {0,0,0,1}  //2nd digit of min, shows one led to say that everything is working
                       };                     
 
-const int batteryProbe = 25; //PB03;
-
+unsigned long pm = 0;
 uint8_t menuIndex = 0; //(dispaly time, date, stopwatch, remaining battery)
+volatile bool wasSleeping = false;
 
 void setup() {
   //set leds as ouputs
@@ -69,32 +69,28 @@ void setup() {
       digitalWrite(ledPin[i][j], ledState[i][j]);
     }
   }
-    
 
-  //Do not remove that line 
-  //ledsTest(5); // set a delay to ease programming, sleep mode can interfere with prog mode
+  ledsTest(3); // set a delay to ease programming, sleep mode can interfere with prog mode
+  //not actually needed if we use a programmer
   
   // Setup the RTCCounter
   rtcCounter.begin();
 
   // Set the alarm to generate an interrupt every s
-  rtcCounter.setPeriodicAlarm(1);
-
-  // Set the sleep mode
-  SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+  rtcCounter.setPeriodicAlarm(SLEEP_DURATION);
 
   //disable usb
-  USB->DEVICE.CTRLA.reg &= ~USB_CTRLA_ENABLE;
+  USBDevice.detach();
+
 
   if (! qt_top.begin() || ! qt_left.begin() || ! qt_right.begin() )  //eror with qtouch makes col 2 blink
   {
     digitalWrite(21,!digitalRead(21));
     delay(500);
   }
+  
+  saveTime(12,30); //for debug
 }
-
-
-unsigned long pm = 0;
 
 void loop() {
   // If the alarm interrupt has been triggered
@@ -104,17 +100,18 @@ void loop() {
     rtcCounter.clearFlag();
 
     // Blink the LED
-    /*
-    digitalWrite(17, HIGH);
+    /*digitalWrite(17, HIGH);
     delay(250);
     digitalWrite(17, LOW);*/
   }
 
   if(qt_top.measure() > QTOUCH_THRESHOLD)  //unlock and display the time
   {  
+    wasSleeping = false;
     timeToLeds();
+    delay(3000);
     pm = millis(); 
-    menuIndex = 0; //reset it if you are lost 
+    menuIndex = 0; //return to first screen (time) if you are lost 
   }
 
   if(qt_right.measure() > QTOUCH_THRESHOLD) 
@@ -136,10 +133,8 @@ void loop() {
       menuIndex++; //don't forget to inc menu because stopwatch is a new screen
     }
     if(menuIndex == 3){
-      remainingBattery();
-      delay(4000); //stay a bit on this screen
+      remainingBattery(3000);
     }
-      
   }
   
   if(qt_left.measure() > QTOUCH_THRESHOLD) 
@@ -153,26 +148,45 @@ void loop() {
   }
 
   //sleeps after timeout
-  if(millis() - pm > ON_DURATION){
+  if(millis() - pm > ON_DURATION || wasSleeping == true){
     // Sleep until the next interrupt
     ledsOff();
     systemSleep();
+    //LowPower.sleep(1000);
     //pm = millis();
     //METTRE D'ABORD -> pm = millis();
   }
   delay(100);
 }
+/*
+void onWakeUp() {
+  wasSleeping = true;  
+  // This function will be called once on device wakeup
+  // You can do some little operations here (like changing variables which will be used in the loop)
+  // Remember to avoid calling delay() and long running functions since this functions executes in interrupt context
+}*/
 
 void systemSleep()
 {
   // If the alarm interrupt has not yet triggered
   
   if (!rtcCounter.getFlag()) {
-    
+    /*__DSB();
     // Wait For Interrupt
+    __WFI();*/
+    wasSleeping = true;  
+    //from ArduinoLowPower
+    // Disable systick interrupt:  See https://www.avrfreaks.net/forum/samd21-samd21e16b-sporadically-locks-and-does-not-wake-standby-sleep-mode
+    SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;	
+    SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+    __DSB();
     __WFI();
+    // Enable systick interrupt
+    SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
   }
+
 }
+
 /*
 void blinkLeds(int col)
 {
@@ -263,10 +277,10 @@ void ledsTest(float speed)
   }
 }
 
-void remainingBattery() 
+void remainingBattery(int time) 
 {
   ledsOff();
-  float voltage = analogRead(batteryProbe);
+  float voltage = analogRead(BATTERY_PROBE);
   //voltage dividor cuts volts of the battery in half
   //Supply voltage is 2.8V
   
@@ -279,13 +293,16 @@ void remainingBattery()
     digitToLedColumn(0b0011, 3);
   else {
     digitToLedColumn(0b0001, 3);
-    //blink = true;
   }
   ledsShow();
+  delay(time);  //stay a bit on this screen
+  digitToLedColumn(0b0000,4); //remove on "buffer"
+  ledsOff(); //shutdown leds
 }
 
 void timeToLeds()
 {
+  ledsOff();
   // Get time as an epoch value and convert to tm struct
   time_t epoch = rtcCounter.getEpoch();
   struct tm* t = gmtime(&epoch);
@@ -305,6 +322,7 @@ void timeToLeds()
 
 void dateToLeds() //close to TimeToLeds
 {
+  ledsOff();
   // Get time as an epoch value and convert to tm struct
   time_t epoch = rtcCounter.getEpoch();
   struct tm* t = gmtime(&epoch);
@@ -554,3 +572,4 @@ void stopwatch()
     }
   }
 }
+
