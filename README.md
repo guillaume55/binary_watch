@@ -1,5 +1,7 @@
 # Binary watch
 
+![Binary watch](https://github.com/guillaume55/binary_watch/blob/main/img/montre.jpg?raw=true)
+
 ## How to read time
 How to read it (BCD, binary coded digits)
 Each digit is separated. The two first digits are for the hours, the two last for minutes
