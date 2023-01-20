@@ -131,3 +131,4 @@ After programming, the watch sleeps at 7.28mA. No idea why, but the problem disa
 ## Possible improvements
 * Don't use arduino framework, there is room to improve consumption by reducing clock speed for example
 * Use a more precise oscillator (as the precision is very low) or use the internal oscillator only
+* Reset button
