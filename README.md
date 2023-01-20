@@ -7,24 +7,56 @@ the Bottom digit adds 1, the second 2, the third 4, and the top one 8
 For instance if # are on and _ are off
 
 ```
+//First screen, time (24h format)
 _ _ _ _
 _ _ # #
 _ # _ #
 # # _ #
 
 1 3:4 7
+
+//second screen, date (DD/MM)
+_ _ _ _
+_ _ _ _
+_ # _ #
+# _ _ #
+
+1 2:0 3 (March 12th)
+
+//third screen, stop watch (indicated led will be on for one second (3rd led, 3rd screen) and the stopwatch will begin counting)
+_ _ # _
+_ _ _ _
+_ _ _ _
+_ _ _ _
+
+1 3:4 7
+
+//last screen, Full battery level here
+_ _ _ #
+_ _ _ #
+_ _ _ #
+_ _ _ #
 ```
 
 ## Features
-* Read time and date
+* Read time and date (24h format, DD/MM)
 * Set time and date
 * Use stopwatch
 * Battery level
+
+## Four different screens
+Navigate between screens with right button
+Return to first screen with top button
+* Display time (24h format)
+* Display date (DD/MM)
+* Stopwatch
+* See battery level (will return to first screen after few seconds)
 
 ## How to use it
 
 ### Powered on, screen off (Idle)
 Use top button to unlock (wake up from sleep) the watch. It will go to sleep after ON_DURATION (default 10s)
+It can be a bit long for the watch to show something as the default pooling interval is 3s.
 
 ### Main screen with menus
 * Right button: Set time (and date)
@@ -44,6 +76,20 @@ A second animation (faster) will tell you that you now have to set the date (DD/
 * Top button: No action
 * Left button: Pause/Resume
 
+### Battery level
+Show battery level as a vertical bar on last column
+```
+//Full battery  --> low battery
+_ _ _ #             _ _ _ _
+_ _ _ #             _ _ _ _
+_ _ _ #             _ _ _ _
+_ _ _ #             _ _ _ #
+
+```
+
+## Power consumption
+* 0.44mA in sleep (standby) mode. Wake up sometimes to poll user touch on button (Would need more tools to see average consumption)
+
 ## BOM
 * SWD programmer (I use Seeedstudio XIAO as DAPLINK, see https://wiki.seeedstudio.com/Seeeduino-XIAO-DAPLink/)
 * PCB, files in PCB/ are JLCPCB ready
@@ -62,7 +108,7 @@ First, connect the programmer. For XIAO, connect
 
 Install libraries
 * Adafruit freetouch (from arduino library manager)
-* RtcCounter (By gabriel Notman, from arduino library manager)
+* RTCZero (from arduino library manager)
 
 Now burn bootloader and program it
 * Start XIAO in bootloader mode (connect usb and restart it twice (see SeeedStudio page)
@@ -78,6 +124,9 @@ Use small layer heights
 You can provide directly file to JLCPCB
 I have chosen one side assembly (microcontroler side) to reduce cost
 I hand soldered leds, it can be cleaner but it's a fair job. You can train on another PCB because leds are very small. You should use a good quality precision iron, a standard size will make the job too hard and the looks terrible
+
+## Known issue
+After programming, the watch sleeps at 7.28mA. No idea why, but the problem disappear after restart
 
 ## Possible improvements
 * Don't use arduino framework, there is room to improve consumption by reducing clock speed for example
