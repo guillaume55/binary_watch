@@ -82,7 +82,7 @@ void setup() {
     digitalWrite(21,!digitalRead(21));
     delay(500);
   }
-  saveTime(12, 11); //the watch is not supposed to shudown.
+  saveTime(12, 11); //the watch is not supposed to shudown. Display at least something when it boots
 }
 
 void loop() {

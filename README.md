@@ -99,7 +99,7 @@ _ _ _ #             _ _ _ #
 * 302323 battery (110mAh)
 * Wireless charger
 
-## Getting started with XIAO as DAPLINK
+## Getting started with XIAO as DAPLINK and Arduino IDE
 First, connect the programmer. For XIAO, connect
 * XIAO GND to GND
 * XIAO VCC to watch Vin on the microcontroller side
@@ -131,4 +131,6 @@ After programming, the watch sleeps at 7.28mA. No idea why, but the problem disa
 ## Possible improvements
 * Don't use arduino framework, there is room to improve consumption by reducing clock speed for example
 * Use a more precise oscillator (as the precision is very low) or use the internal oscillator only
-* Reset button
+* Reset button or pad, maybe replace front 2.8V pad by reset pad
+* Use another microcontroller optimized for low power, for example SAML21 (not in stock and available for assembly) or a STM32
+* Improve hardware consumption
