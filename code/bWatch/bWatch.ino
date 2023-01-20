@@ -54,7 +54,7 @@ int ledState [4][4] = { {0,0,0,0}, //1st digit of hours
 
 unsigned long pm = 0;
 uint8_t menuIndex = 0; //(dispaly time, date, stopwatch, remaining battery)
-volatile bool wasSleeping = false;
+bool wasSleeping = false;
 
 void setup() {
   //set leds as ouputs
