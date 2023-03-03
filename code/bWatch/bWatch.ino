@@ -16,19 +16,23 @@
  * Left button : set time and then date
  * Right button : change mode (time, date, stopwatch, remaining battery)
  * See readme for more details
+ * Power consumption depend a lot on selected board. Arduino zero consumes 0.44mA during standby, sparkfun SAMD21 Dev only 0.27mA
  *
  *******************************/
+
+ //Arduino_MCHPTouch.h ?
 
 #include <RTCZero.h>
 #include <time.h>
 #include "Adafruit_FreeTouch.h"
+#include "ArduinoLowPower.h"
 
 #define BUTTON_RIGHT 42//PA03
 #define BUTTON_LEFT A5//PB02
 #define BUTTON_TOP A1//PB08
 #define BATTERY_PROBE 25 //PB03;
 
-#define QTOUCH_THRESHOLD 600
+#define QTOUCH_THRESHOLD 500
 
 #define ON_DURATION 10000 //sec during which the watch is showing time
 #define SLEEP_DURATION 3 //sec during which the device is sleeping. Correspond to the max amount of time between 2 readings of the capacitive button
@@ -74,9 +78,9 @@ void setup() {
   rtc.begin(false); //don't reset time
 
   //disable usb 
-  //USBDevice.detach();
-  USB->DEVICE.CTRLA.reg &= ~USB_CTRLA_ENABLE;
+  USBDevice.detach();
 
+//most of the power consumption is here. make the standby current goes from 0.08mA to 0.27mA
   if (! qt_top.begin() || ! qt_left.begin() || ! qt_right.begin() )  //eror with qtouch makes col 2 blink
   {
     digitalWrite(21,!digitalRead(21));
@@ -98,6 +102,7 @@ void loop() {
 
   if(qt_right.measure() > QTOUCH_THRESHOLD /*&& wasSleeping = false*/)
   {
+    wasSleeping = false;
     menuIndex = (menuIndex+1) % 4;
     //show index for 1s
     digitalWrite(ledPin[menuIndex][0], HIGH);
@@ -120,6 +125,7 @@ void loop() {
 
   if(qt_left.measure() > QTOUCH_THRESHOLD /*&& wasSleeping = false*/)
   {
+    wasSleeping = false;
     ledsTest(0.75);
     setTime();
     ledsTest(0.5); //faster animation
@@ -135,13 +141,7 @@ void loop() {
     // Sleep until the next interrupt
     ledsOff();
     wasSleeping = true;
-    //Set sleep mask to standby
-    SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
-    rtc.enableAlarm(rtc.MATCH_HHMMSS);
-    //rtc.setAlarmSeconds(rtc.getSeconds()+SLEEP_DURATION); // no !!! doesn't works if we change the time with setTime. The alarm is not only based on seconds
-    rtc.setAlarmEpoch(rtc.getEpoch()+SLEEP_DURATION);
-    delay(10);
-    rtc.standbyMode();
+    LowPower.sleep(3000);
   }
   delay(100);
 }
@@ -196,16 +196,16 @@ void ledsTest(float speed)
 void remainingBattery(int time)
 {
   ledsOff();
-  float voltage = analogRead(BATTERY_PROBE);
+  int voltage = analogRead(BATTERY_PROBE);
   //voltage dividor cuts volts of the battery in half
   //Supply voltage is 2.8V
 
-  voltage = ( 2.8 * 1023 ) / voltage;
-  if(voltage > 4)
+  //voltage = ( 2.8 * 1023 ) / voltage;
+  if(voltage > 2200)
     digitToLedColumn(0b1111, 3);
-  else if(voltage > 3.6)
+  else if(voltage > 1600)
     digitToLedColumn(0b0111, 3);
-  else if(voltage > 3.2)
+  else if(voltage > 1100)
     digitToLedColumn(0b0011, 3);
   else {
     digitToLedColumn(0b0001, 3);
@@ -352,22 +352,19 @@ void setDate()
   while(qt_top.measure() < QTOUCH_THRESHOLD+100 && index < 4)
   {
     if(qt_right.measure() > QTOUCH_THRESHOLD){
-
       index += 2;
-
       ledsShow();
       delay(300);
       ledsOff();
     }
 
-    if( (qt_left.measure() > QTOUCH_THRESHOLD || doInit == 1) && index < 4){
+    if((qt_left.measure() > QTOUCH_THRESHOLD || doInit == 1) && index < 4){
       doInit = 0; //do it once only
 
       if(index == 0) //first we modify mday
         mday = (mday + 1) % 31;
       if(index == 2) //then month
         month = (month + 1) % 12;
-
 
       //refresh leds
       uint8_t timeArr[4] = {(mday+1) / 10, //do +1 because January 1st is month 0 and mday 0 for ex, starts at 0 not 1
@@ -382,18 +379,19 @@ void setDate()
       }
       ledsShow();
       delay(300);
-
     }
 
-    //blink active column(s)
-    ledsColOff(index); //okay since it does not modify leds array
-    ledsColOff(index+1);//blink two colums
-    delay(50);
-    ledsShow();
-    delay(200);
-
+    if(index < 4) { // don't forget the if ! Will try to access index over array length else
+      //blink active column(s)
+      ledsColOff(index); //okay since it does not modify leds array
+      ledsColOff(index+1);//blink two colums
+      delay(50);
+      ledsShow();
+      delay(200);
+    }
   }
   saveDate(mday, month);
+  
 }
 
 void saveDate(uint8_t day, uint8_t month)
@@ -437,9 +435,9 @@ void stopwatch()
       uint8_t sec = ( ((millis() - sTime) / 1000) % 60);
 
       uint8_t timeArr[4] = {minutes / 10 ,  //1st digit of min
-                         minutes % 10,  //2nd of hours
-                         sec / 10,  //1st digit of min
-                         sec % 10   //2nd of min
+                         minutes % 10,  //2nd of min
+                         sec / 10,  //1st digit of sec
+                         sec % 10   //2nd of sec
                     };
 
       for(int i=0; i<4; i++)  //read and copy the bits from digit to led digit
