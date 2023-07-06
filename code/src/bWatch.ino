@@ -32,7 +32,10 @@
 #define BUTTON_TOP A1//PB08
 #define BATTERY_PROBE 25 //PB03;
 
-#define QTOUCH_THRESHOLD 500
+#define QTOUCH_THRESHOLD_LEFT 425
+#define QTOUCH_THRESHOLD_TOP 500
+#define QTOUCH_THRESHOLD_RIGHT 500
+
 
 #define ON_DURATION 10000 //sec during which the watch is showing time
 #define SLEEP_DURATION 3 //sec during which the device is sleeping. Correspond to the max amount of time between 2 readings of the capacitive button
@@ -60,91 +63,7 @@ unsigned long pm = 0;
 uint8_t menuIndex = 0; //(dispaly time, date, stopwatch, remaining battery)
 bool wasSleeping = false;
 
-void setup() {
-  //set leds as ouputs
-  for(int i=0; i<4; i++)
-  {
-    for(int j=0; j<4; j++)
-    {
-      pinMode(ledPin[i][j], OUTPUT);
-      digitalWrite(ledPin[i][j], ledState[i][j]);
-    }
-  }
 
-  ledsTest(3); // set a delay to ease programming, sleep mode can interfere with prog mode
-  //not actually needed if we use a programmer
-
-  // Setup the RTC
-  rtc.begin(false); //don't reset time
-
-  //disable usb 
-  USBDevice.detach();
-
-//most of the power consumption is here. make the standby current goes from 0.08mA to 0.27mA
-  if (! qt_top.begin() || ! qt_left.begin() || ! qt_right.begin() )  //eror with qtouch makes col 2 blink
-  {
-    digitalWrite(21,!digitalRead(21));
-    delay(500);
-  }
-  saveTime(12, 11); //the watch is not supposed to shudown. Display at least something when it boots
-}
-
-void loop() {
-
-  if(qt_top.measure() > QTOUCH_THRESHOLD)  //unlock and display the time
-  {
-    wasSleeping = false;
-    timeToLeds();
-    delay(3000);
-    pm = millis();
-    menuIndex = 0; //return to first screen (time) if you are lost
-  }
-
-  if(qt_right.measure() > QTOUCH_THRESHOLD /*&& wasSleeping = false*/)
-  {
-    wasSleeping = false;
-    menuIndex = (menuIndex+1) % 4;
-    //show index for 1s
-    digitalWrite(ledPin[menuIndex][0], HIGH);
-    delay(500);
-    digitalWrite(ledPin[menuIndex][0], LOW);
-
-    if(menuIndex == 0)
-      timeToLeds();
-    if(menuIndex == 1)
-      dateToLeds();
-    if(menuIndex == 2){
-      stopwatch();
-      menuIndex++; //don't forget to inc menu because stopwatch is a new screen
-    }
-    if(menuIndex == 3){
-      remainingBattery(3000);
-    }
-    pm = millis();
-  }
-
-  if(qt_left.measure() > QTOUCH_THRESHOLD /*&& wasSleeping = false*/)
-  {
-    wasSleeping = false;
-    ledsTest(0.75);
-    setTime();
-    ledsTest(0.5); //faster animation
-    setDate();
-    ledsTest(0.5);
-
-    menuIndex = 0; //return to time display
-    pm = millis();
-  }
-
-  //sleeps after timeout or if we woke up and the user didn't touch any button
-  if(millis() - pm > ON_DURATION || wasSleeping == true){
-    // Sleep until the next interrupt
-    ledsOff();
-    wasSleeping = true;
-    LowPower.sleep(3000);
-  }
-  delay(100);
-}
 
 //show the leds that are supposed to be on
 void ledsShow()
@@ -277,10 +196,10 @@ void setTime()
   bool doInit = 1; //force display
 
   //top button to quit if not finished, better to click right
-  while(qt_top.measure() < QTOUCH_THRESHOLD+100 && index < 4)
+  while(qt_top.measure() < QTOUCH_THRESHOLD_TOP+100 && index < 4)
   {
     //hours modified, edit sec
-    if(qt_right.measure() > QTOUCH_THRESHOLD){
+    if(qt_right.measure() > QTOUCH_THRESHOLD_RIGHT){
       if(index == 0){
         index += 2; //hours in one shot
       }
@@ -292,7 +211,7 @@ void setTime()
       ledsOff();
     }
 
-    if( (qt_left.measure() > QTOUCH_THRESHOLD || doInit == 1) && index < 4){
+    if( (qt_left.measure() > QTOUCH_THRESHOLD_LEFT || doInit == 1) && index < 4){
       doInit = 0; //do it once only
 
       if(index == 0) //1st of hour
@@ -349,16 +268,16 @@ void setDate()
   //display current value
   bool doInit = 1;
 
-  while(qt_top.measure() < QTOUCH_THRESHOLD+100 && index < 4)
+  while(qt_top.measure() < QTOUCH_THRESHOLD_TOP+100 && index < 4)
   {
-    if(qt_right.measure() > QTOUCH_THRESHOLD){
+    if(qt_right.measure() > QTOUCH_THRESHOLD_RIGHT){
       index += 2;
       ledsShow();
       delay(300);
       ledsOff();
     }
 
-    if((qt_left.measure() > QTOUCH_THRESHOLD || doInit == 1) && index < 4){
+    if((qt_left.measure() > QTOUCH_THRESHOLD_LEFT || doInit == 1) && index < 4){
       doInit = 0; //do it once only
 
       if(index == 0) //first we modify mday
@@ -410,11 +329,11 @@ void stopwatch()
 
   ledsOff();
 
-  while(qt_right.measure() < QTOUCH_THRESHOLD)
+  while(qt_right.measure() < QTOUCH_THRESHOLD_RIGHT)
   {
 
     //left button will pause
-    if(qt_left.measure() > QTOUCH_THRESHOLD)
+    if(qt_left.measure() > QTOUCH_THRESHOLD_LEFT)
     {
       paused = !paused;
       ledsOff();
@@ -447,4 +366,90 @@ void stopwatch()
       ledsShow();
     }
   }
+}
+
+void setup() {
+  //set leds as ouputs
+  for(int i=0; i<4; i++)
+  {
+    for(int j=0; j<4; j++)
+    {
+      pinMode(ledPin[i][j], OUTPUT);
+      digitalWrite(ledPin[i][j], ledState[i][j]);
+    }
+  }
+
+  ledsTest(3); // set a delay to ease programming, sleep mode can interfere with prog mode
+  //not actually needed if we use a programmer
+
+  // Setup the RTC
+  rtc.begin(false); //don't reset time
+
+  //disable usb 
+  USBDevice.detach();
+
+//most of the power consumption is here. make the standby current goes from 0.08mA to 0.27mA
+  if (! qt_top.begin() || ! qt_left.begin() || ! qt_right.begin() )  //eror with qtouch makes col 2 blink
+  {
+    digitalWrite(21,!digitalRead(21));
+    delay(500);
+  }
+  saveTime(12, 11); //the watch is not supposed to shudown. Display at least something when it boots
+}
+
+void loop() {
+
+  if(qt_top.measure() > QTOUCH_THRESHOLD_TOP)  //unlock and display the time
+  {
+    wasSleeping = false;
+    timeToLeds();
+    delay(3000);
+    pm = millis();
+    menuIndex = 0; //return to first screen (time) if you are lost
+  }
+
+  if(qt_right.measure() > QTOUCH_THRESHOLD_RIGHT /*&& wasSleeping = false*/)
+  {
+    wasSleeping = false;
+    menuIndex = (menuIndex+1) % 4;
+    //show index for 1s
+    digitalWrite(ledPin[menuIndex][0], HIGH);
+    delay(500);
+    digitalWrite(ledPin[menuIndex][0], LOW);
+
+    if(menuIndex == 0)
+      timeToLeds();
+    if(menuIndex == 1)
+      dateToLeds();
+    if(menuIndex == 2){
+      stopwatch();
+      menuIndex++; //don't forget to inc menu because stopwatch is a new screen
+    }
+    if(menuIndex == 3){
+      remainingBattery(3000);
+    }
+    pm = millis();
+  }
+
+  if(qt_left.measure() > QTOUCH_THRESHOLD_LEFT /*&& wasSleeping = false*/)
+  {
+    wasSleeping = false;
+    ledsTest(0.75);
+    setTime();
+    ledsTest(0.5); //faster animation
+    setDate();
+    ledsTest(0.5);
+
+    menuIndex = 0; //return to time display
+    pm = millis();
+  }
+
+  //sleeps after timeout or if we woke up and the user didn't touch any button
+  if(millis() - pm > ON_DURATION || wasSleeping == true){
+    // Sleep until the next interrupt
+    ledsOff();
+    wasSleeping = true;
+    LowPower.sleep(3000);
+  }
+  delay(100);
 }
