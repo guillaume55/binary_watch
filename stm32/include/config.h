@@ -20,7 +20,9 @@
 #define SW2_PIN         GPIO_PIN_6   /* active LOW, EXTI6 */
 
 /* ── Charlieplexing ─────────────────────────────────────────────────── */
-#define NUM_LEDS        14U          /* LED1–LED14 on PA0–PA4 */
+#define NUM_LEDS        16U          /* L1–L16 on PA0–PA4 (5×4=20 max)       */
+#define L3_IDX          2U           /* L3 spare — defined but never driven   */
+#define L4_IDX          3U           /* L4 battery indicator — set_battery_led() only */
 
 /* ── Charlieplex scan timer ─────────────────────────────────────────── */
 /* TIM2: 16 MHz / (PSC+1) / (ARR+1) = 1 kHz  →  PSC=15, ARR=999       */

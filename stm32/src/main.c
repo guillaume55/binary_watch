@@ -130,6 +130,13 @@ int main(void)
     rtc_init();            /* init RTC on LSE, cold-start = 00:00    */
 
     charlie_start();
+
+#ifdef BOARD_TEST
+    /* Visual LED validation: light L1–L16 one by one, 300 ms each.
+       Enable by adding -DBOARD_TEST to build_flags in platformio.ini.  */
+    charlie_test_all_leds(300U);
+#endif
+
     run_startup_anim();
 
     refresh_time_display();
@@ -152,6 +159,7 @@ int main(void)
         /* ── Sleep ──────────────────────────────────────────────── */
         case STATE_SLEEP:
             set_leds(0U);
+            set_battery_led(0U);
             charlie_stop();
             buttons_clear_pending();
             enter_stop();          /* blocks until EXTI wakeup      */
@@ -173,7 +181,8 @@ int main(void)
             } else if (ev == BTN_SW2_LONG) {
                 batt_pct      = battery_measure_percent();
                 batt_deadline = HAL_GetTick() + BATTERY_DISP_MS;
-                set_leds(battery_to_mask(batt_pct));
+                set_leds(0U);             /* blank BCD display          */
+                set_battery_led(1U);      /* light L4 (battery LED)     */
                 state = STATE_SHOW_BATTERY;
 
             } else if (ev == BTN_SW1_SHORT || ev == BTN_SW2_SHORT) {
@@ -225,16 +234,13 @@ int main(void)
 
         /* ── Battery display ─────────────────────────────────────── */
         case STATE_SHOW_BATTERY:
-            /* Blink the single LED when battery is critically low */
+            /* Blink L4 at 4 Hz when critically low (<25 %) */
             if (batt_pct < 25U) {
-                if ((HAL_GetTick() / BLINK_PERIOD_MS) & 1U) {
-                    set_leds(0U);
-                } else {
-                    set_leds(battery_to_mask(batt_pct));
-                }
+                set_battery_led((HAL_GetTick() / BLINK_PERIOD_MS) & 1U);
             }
 
             if (HAL_GetTick() >= batt_deadline) {
+                set_battery_led(0U);
                 refresh_time_display();
                 state            = STATE_SHOW_TIME;
                 display_deadline = HAL_GetTick() + TIME_ON_MS;
